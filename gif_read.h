@@ -52,69 +52,39 @@ namespace gif_read
         struct GIFImpl* _impl = nullptr;
     };
     
-    //interface for streaming GIF classes
-    class IStreamingGIF
+    //Instead of storing index streams, only the compressed gif data is stored, and is decompressed as new frames are needed
+    //To support multiple instances of a GIF displaying different frames, StreamingGIFs are accessed through gif-erators
+    //(my stupid name for gif iterators), which require an allocation of 1 frame of gif data each. The memory for all
+    //giferators is handled by the streamingGIF class they're allocated by, and accessed through a uint32 handle.
+    class StreamingGIF
     {
     public:
+        //gifFileData is the binary contents of a .gif file. Ctor will memcpy
+        //out of this data, but doesn't need it after the ctor finishes.
+        //dealloc the gifFileData ptr yourself after construction
+        StreamingGIF( const uint8* gifFileData, uint32 maxIterators = 8 );
+        ~StreamingGIF();
+        StreamingGIF(const StreamingGIF&) = delete;
+        StreamingGIF& operator=(const StreamingGIF&) = delete;
+        
         uint32 getWidth() const;
         uint32 getHeight() const;
         uint32 getNumFrames() const;
         float getDurationInSeconds() const;
         
-        //both of these return an array of unsigned byte RGBA pixel data
-        //Alpha will always be 255
-        const uint8* getCurrentFrame() const;
+        uint32 createIterator();
+        bool isIteratorValid(uint32 iterator);
+        void destroyIterator(uint32 iterator);
+        
+        //returns true if time has advanced enough to get a new frame
+        bool tickSingleIterator(uint32 interator, float deltaTime);
+        void tick(float deltaTime); //ticks all iterators
+        
         const uint8* getFirstFrame() const;
+        const uint8* getCurrentFrame(uint32 interator) const;
         
-        virtual bool tick(float deltaTime) = 0;
-        
-        IStreamingGIF();
-        virtual ~IStreamingGIF();
-
-        IStreamingGIF(const IStreamingGIF&) = delete;
-        IStreamingGIF& operator=(const IStreamingGIF&) = delete;
     protected:
         struct StreamingGIFImpl* _impl = nullptr;
-    };
-    
-    //lighter GIF class that provides access only to the first frame of a gif and the current frame
-    //being played. Frames can only advance linearly, and advancing the frame requires some CPU to merge
-    //the next frame's data with the current frame array. Roughly 60% smaller in memory than the GIF class
-    class StreamingGIF : public IStreamingGIF
-    {
-    public:
         
-        //gifFileData is the binary contents of a .gif file. Ctor will memcpy
-        //out of this data, but doesn't need it after the ctor finishes.
-        //dealloc the gifFileData ptr yourself after construction
-        StreamingGIF( const uint8* gifFileData);
-        virtual ~StreamingGIF();
-        
-        //returns true if time has advanced enough to get a new frame
-        //will also update currentFrame if necessary. tick() will only ever
-        //increment the current frame by 1. If you provide a timestep that
-        //requires jumping multiple frames, it will take severall calls to
-        //tick() to catch up. This is intentional, to prevent CPU hitches
-        //from causing atypical CPU usage when encountering a hitch in a
-        //running game
-        virtual bool tick(float deltaTime) override final;
-    };
-    
-    //even lighter gif class on memory, at the cost of CPU time every new frame. Instead of storing
-    //index streams, only the compressed gif data is stored, and is decompressed as new frames are needed
-    //Size savings depend on quality of gif compression, but can be upwards of 3x smaller than regular streaming gif
-    class StreamingCompressedGIF : public IStreamingGIF
-    {
-    public:
-        //gifFileData is the binary contents of a .gif file. Ctor will memcpy
-        //out of this data, but doesn't need it after the ctor finishes.
-        //dealloc the gifFileData ptr yourself after construction
-        StreamingCompressedGIF( const uint8* gifFileData );
-        virtual ~StreamingCompressedGIF();
-        
-        //returns true if time has advanced enough to get a new frame
-        //will also update currentFrame if necessary. See notes in StreamingGIF
-        //for further info.
-        bool tick(float deltaTime) override final;
     };
 }

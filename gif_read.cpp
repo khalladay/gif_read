@@ -170,7 +170,7 @@ namespace gif_read
     void InitializeCodeTable(LZWCodeTable& table, uint16 colorTableLen, uint16 lzwMinCodeSize)
     {
         uint16 numColors = 1 << (colorTableLen + 1);
-
+        
         table.codeSize = lzwMinCodeSize;
         table.numCodes = (1 << table.codeSize) + 2;
         
@@ -195,7 +195,7 @@ namespace gif_read
         
         const uint8* blockData = compressedData;
         uint32 bytesRead = 0;
-
+        
         while(bytesRead < sizeOfCompressedData)
         {
             uint16 curCode = prevState.partialCode != NO_CODE ? prevState.partialCode : 0;
@@ -247,12 +247,12 @@ namespace gif_read
                 {
                     codePtr = curCode;
                 }
-
+                
                 while ( codeTable.rows[codePtr].prev != NO_INDEX )
                 {
                     codePtr = codeTable.rows[codePtr].prev;
                 }
-
+                
                 CodeTableRow& newRow = codeTable.rows[codeTable.numCodes];
                 newRow.byte = codeTable.rows[codePtr].byte;
                 newRow.prev = state.prevCode;
@@ -273,10 +273,10 @@ namespace gif_read
             while (curCode != NO_CODE)
             {
                 GT_CHECK(numCodes < 1024, "Error parsing compressed gif data. A code refers to more than 1024 color values but our buffer's size is 1024");
-
+                
                 CodeTableRow& curRow = codeTable.rows[curCode];
                 GT_CHECK(curRow.prev != curCode, "Error parsing compressed gif data. A codetable row's prevCode value points to itself");
-
+                
                 codes[numCodes++] = curRow.byte;
                 curCode = curRow.prev;
             }
@@ -292,7 +292,7 @@ namespace gif_read
         
         return state;
     }
-   
+    
     void indexStreamToColorArray(const IndexStream& indexStream, const Color* colorTable, uint8* outputArray, uint32 transparentColorIdx, const Frame& frame, const Header& header)
     {
         uint32 w = header.width;
@@ -313,8 +313,8 @@ namespace gif_read
             uint32 thisX = i-(thisY * w);
             
             bool isInFrame = thisX >= frameMinX && thisX < frameMaxX &&
-                             thisY >= frameMinY && thisY < frameMaxY;
-
+            thisY >= frameMinY && thisY < frameMaxY;
+            
             if (isInFrame)
             {
                 uint32 code = indexStream.indices[nextIdx++];
@@ -330,9 +330,9 @@ namespace gif_read
             }
         }
         
-        GT_CHECK(bytesWritten == indexStream.numIndices, "Didn't write all bytes to color array");
+        //  GT_CHECK(bytesWritten == indexStream.numIndices, "Didn't write all bytes to color array");
     }
-
+    
     const uint8* parseHeader(const uint8* dataPtr, Header& header)
     {
         memcpy(&header, dataPtr, sizeof(Header));
@@ -349,10 +349,10 @@ namespace gif_read
             memcpy(*colorTable, dataPtr, sizeof(Color) * numEntries);
             dataPtr += sizeof(Color) * numEntries;
         }
-
+        
         return dataPtr;
     }
-
+    
     const uint8* parseExtension(const uint8* dataPtr, uint32& totalRunTime, GraphicsControlBlock* gfxControlBlocks, uint32& numGfxBlocks)
     {
         uint8 extensionType = *dataPtr++;
@@ -388,7 +388,7 @@ namespace gif_read
                     subBlockSize = *dataPtr;
                     if (subBlockSize > 0) dataPtr++;
                 }
-
+                
             }break;
             case ET_Comment:
             {
@@ -399,7 +399,7 @@ namespace gif_read
                     subBlockSize = *(dataPtr += subBlockSize);
                     if (subBlockSize > 0) dataPtr++;
                 }
-
+                
             }break;
             case ET_PlainText:
             {
@@ -423,7 +423,7 @@ namespace gif_read
         dataPtr++;
         
         return dataPtr;
-
+        
     }
     
     const uint8* parseFrameHeader(const uint8* dataPtr, Frame& outFrame)
@@ -458,7 +458,7 @@ namespace gif_read
     void filBufferWithBackgroundColor(uint8* frameBuffer, const GifFileData& gif)
     {
         const uint8* bgCol = gif.globalColorTable[gif.header.bgColor].rgb;
-
+        
         for (int i = 0; i < gif.header.width * gif.header.height; i++)
         {
             frameBuffer[i*4] = bgCol[0];
@@ -466,7 +466,7 @@ namespace gif_read
             frameBuffer[i*4+2] = bgCol[2];
             frameBuffer[i*4+3] = 255;
         }
-
+        
     }
     
     //parses frame, but returns concatenated compressed data instead of decompressing it here
@@ -482,25 +482,26 @@ namespace gif_read
         
         
         //first, iterate over all subblocks to get total size
-
+        
         const uint8* subBlockIterPtr = dataPtr;
         
         uint8 sizeOfSubBlock = *subBlockIterPtr++;
-        uint16 totalSizeOfAllCodes = 0;
+        uint32 totalSizeOfAllCodes = 0; //needs to be 32 bit or else it will overflow on larger gifs
         while(sizeOfSubBlock > 0)
         {
             totalSizeOfAllCodes += sizeOfSubBlock;
+            
             subBlockIterPtr += sizeOfSubBlock;
             sizeOfSubBlock = *subBlockIterPtr;
             if (sizeOfSubBlock > 0) subBlockIterPtr++;
         }
-
+        
         outSizes[frameIdx] = totalSizeOfAllCodes;
         outData[frameIdx] = (uint8*)GT_MALLOC(totalSizeOfAllCodes);
-        uint16 totalCopiedBytes = 0;
+        uint32 totalCopiedBytes = 0;
         
         //then iterate over all subblocks again to get compressed data, now that we've allocated the buffer to hold it
-
+        
         sizeOfSubBlock = *dataPtr++;
         while(sizeOfSubBlock > 0)
         {
@@ -510,7 +511,7 @@ namespace gif_read
             sizeOfSubBlock = *dataPtr;
             if (sizeOfSubBlock > 0) dataPtr++;
         }
-
+        
         gif.imageData[frameIdx] = nextFrame;
         
         GT_CHECK(*dataPtr == 0x0, "Last byte of frame isn't block terminator. Something has gone wrong");
@@ -526,7 +527,7 @@ namespace gif_read
         Frame nextFrame = {0};
         uint32& frameIdx = gif.numFrames;
         GT_CHECK(frameIdx < MAX_GIF_FRAMES, "Gif has > 4096 frames, but the parsing code's frame buffer only holds 4096. Increase the size of the parsing code's frame array, or change the code to use a dynamically allocated array to fix.");
-
+        
         dataPtr = parseFrameHeader(dataPtr, nextFrame);
         
         if (gif.numGfxBlocks> 0)
@@ -540,9 +541,9 @@ namespace gif_read
         nextFrame.lzwMinCodeSize = *dataPtr++;
         GT_CHECK(nextFrame.lzwMinCodeSize <= 12, "Error getting LZWMinCodeSize: value should always be <=12, but current value is %i", nextFrame.lzwMinCodeSize);
         uint8 sizeOfSubBlock = *dataPtr++;
-
+        
         DecompressionState dcState;
-    
+        
         IndexStream localFrameStream;
         IndexStream& indexStream = outStream ? *outStream : localFrameStream;
         indexStream.numIndices = 0;
@@ -591,7 +592,7 @@ namespace gif_read
         GifFileData file;
         uint8* images[MAX_GIF_FRAMES];
     };
-
+    
     GIF::GIF( const uint8* gifData )
     {
         _impl = (GIFImpl*)GT_CALLOC(1,sizeof(GIFImpl));
@@ -685,73 +686,59 @@ namespace gif_read
 #pragma mark - IStreamingGIF class methods
 namespace gif_read
 {
+    struct StreamingGIFIter
+    {
+        float currentTime = 0.0f;
+        uint16 currentFrameIdx = 0;
+        uint8* currentFrame = nullptr;
+    };
+    
     struct StreamingGIFImpl
     {
         GifFileData file;
-        
         uint8* firstFrame = nullptr;
-        uint8* currentFrame = nullptr;
-        float currentTime = 0.0f;
-        uint16 currentFrameIdx = 0;
         
         IndexStream* indexStreams = nullptr; //streaming gif pre-calculates the index stream for each frame
         uint8** compressedData = nullptr; //streaming compressed gif pre-concatenates compressed data for each frame
         uint16* compressedDataSizes = nullptr;
         DecompressionState decompressionState;
+        
+        StreamingGIFIter* iterators;
+        uint32 numIterators;
+        uint32 maxIterators;
     };
     
-    IStreamingGIF::IStreamingGIF()
+    const uint8* StreamingGIF::getCurrentFrame(uint32 iterator) const
     {
-        _impl = (StreamingGIFImpl*)GT_CALLOC(1,sizeof(StreamingGIFImpl));
+        GT_CHECK(iterator < _impl->maxIterators, "Attempting to get frame for iterator that does not exist");
+        GT_CHECK(iterator < _impl->numIterators, "Attempting to get frame for an iterator that does not exist");
+        
+        StreamingGIFIter& iter = _impl->iterators[iterator];
+        if (iter.currentFrameIdx == 0) return _impl->firstFrame;
+        return _impl->iterators[iterator].currentFrame;
     }
     
-    IStreamingGIF::~IStreamingGIF()
-    {
-        if (_impl)
-        {
-            GT_FREE(_impl->file.globalColorTable);
-            
-            if (_impl->firstFrame)
-            {
-                GT_FREE(_impl->firstFrame);
-                _impl->firstFrame = nullptr;
-            }
-            
-            if (_impl->currentFrame)
-            {
-                GT_FREE(_impl->currentFrame);
-            }
-            
-            GT_FREE(_impl);
-        }
-    }
-    
-    const uint8* IStreamingGIF::getCurrentFrame() const
-    {
-        return _impl->currentFrame;
-    }
-    
-    const uint8* IStreamingGIF::getFirstFrame() const
+    const uint8* StreamingGIF::getFirstFrame() const
     {
         return _impl->firstFrame;
     }
-
-    uint32 IStreamingGIF::getWidth() const
+    
+    uint32 StreamingGIF::getWidth() const
     {
         return _impl->file.header.width;
     }
     
-    uint32 IStreamingGIF::getHeight() const
+    uint32 StreamingGIF::getHeight() const
     {
         return _impl->file.header.height;
     }
     
-    uint32 IStreamingGIF::getNumFrames() const
+    uint32 StreamingGIF::getNumFrames() const
     {
         return _impl->file.numFrames;
     }
     
-    float IStreamingGIF::getDurationInSeconds() const
+    float StreamingGIF::getDurationInSeconds() const
     {
         return _impl->file.totalRunTime * 100;
     }
@@ -760,112 +747,12 @@ namespace gif_read
 #pragma mark - StreamingGIF class methods
 namespace gif_read
 {
-    StreamingGIF::StreamingGIF( const uint8* gifData )
-    :IStreamingGIF()
+    StreamingGIF::StreamingGIF( const uint8* gifData, uint32 inMaxIterators /* = 8 */ )
     {
-        GifFileData& gif = _impl->file;
-        gif.numFrames = 0;
-        _impl->indexStreams = (IndexStream*)GT_MALLOC(sizeof(IndexStream) * MAX_GIF_FRAMES);
-
-        const uint8* ptr = nullptr;
-        ptr = parseHeader(gifData, gif.header);
-        ptr = parseGlobalColorTable(ptr, &gif.globalColorTable, gif.header);
-
-        //working buffer for frame data
-        _impl->currentFrame = (uint8*)GT_MALLOC(gif.header.width * gif.header.height * 4 * sizeof(uint8));
-        _impl->firstFrame = (uint8*)GT_MALLOC(gif.header.width * gif.header.height * 4 * sizeof(uint8));
-
-        uint8 nextBlock = *ptr++;
-        while (nextBlock != BT_Trailer)
-        {
-            if (nextBlock == BT_Extension)
-            {
-                ptr = parseExtension(ptr, gif.totalRunTime, gif.gfxControlBlocks, gif.numGfxBlocks);
-            }
-            else if (nextBlock == BT_ImageDescriptor)
-            {
-                ptr = parseFrame(ptr, _impl->currentFrame, gif, nullptr, &_impl->indexStreams[gif.numFrames]); //don't create images, but parse index stream
-            }
-            else
-            {
-                GT_CHECK(false, "Got bad block format byte. Code expects each block to start with either 0x21, 0x2C or 0x3B");
-            }
-            
-            nextBlock = *ptr++;
-        }
-
-        //create color array for first frame
-        Frame& firstFrameData = gif.imageData[0];
-        uint32 transparentIdx = gif.numGfxBlocks > 0 ? gif.gfxControlBlocks[0].transparentColorIdx : NO_CODE;
-        Color* colorTable = firstFrameData.localColorTable ? firstFrameData.localColorTable : gif.globalColorTable;
-        indexStreamToColorArray(_impl->indexStreams[0], colorTable, _impl->firstFrame, transparentIdx, firstFrameData, gif.header);
+        _impl = (StreamingGIFImpl*)GT_CALLOC(1,sizeof(StreamingGIFImpl));
+        _impl->iterators = (StreamingGIFIter*)GT_MALLOC(sizeof(StreamingGIFIter) * inMaxIterators);
+        _impl->maxIterators = inMaxIterators;
         
-        memcpy(_impl->currentFrame, _impl->firstFrame, gif.header.width * gif.header.height * 4 * sizeof(uint8));
-
-    }
-    
-    //returns true if time has advanced enough to get a new frame
-    bool StreamingGIF::tick(float deltaTime)
-    {
-        GT_CHECK(deltaTime > 0, "Passed negative time to StreamingGif::Tick()");
-        deltaTime = deltaTime > 0 ? deltaTime : 0;
-        _impl->currentTime += deltaTime;
-        
-        GifFileData& gif = _impl->file;
-        uint32 runTime = gif.totalRunTime;
-        if (runTime == 0) return false;
-        
-        uint32 runningTime = 0;
-        uint32 hundredths = (uint32)(_impl->currentTime * 100.0f) % gif.totalRunTime;
-        bool newFrame = false;
-        for (uint32 i = 0; i < gif.numGfxBlocks; ++i)
-        {
-            runningTime += gif.gfxControlBlocks[i].delayTime;
-            if (hundredths < runningTime)
-            {
-                if (_impl->currentFrameIdx != i)
-                {
-                    if (i == 0)
-                    {
-                        memcpy(_impl->currentFrame, _impl->firstFrame, gif.header.width * gif.header.height * 4 * sizeof(uint8));
-                    }
-                    else
-                    {
-                        //next frame
-                        Frame& frameData = gif.imageData[i];
-                        uint32 transparentIdx = gif.numGfxBlocks > 0 ? gif.gfxControlBlocks[i].transparentColorIdx : NO_CODE;
-                        Color* colorTable = frameData.localColorTable ? frameData.localColorTable : gif.globalColorTable;
-                        indexStreamToColorArray(_impl->indexStreams[i], colorTable, _impl->currentFrame, transparentIdx, frameData, gif.header);
-                    }
-                    newFrame = true;
-                    _impl->currentFrameIdx = i;
-                }
-                break;
-            }
-        }
-        
-        return newFrame;
-    }
-    
-    StreamingGIF::~StreamingGIF()
-    {
-        for (uint32 i = 0; i < _impl->file.numFrames; ++i)
-        {
-            IndexStream& istream = _impl->indexStreams[i];
-            if (istream.indices) GT_FREE(istream.indices);
-        }
-        
-        GT_FREE(_impl->indexStreams);
-
-    }
-}
-
-#pragma mark - StreamingCompressedGIF class methods
-namespace gif_read
-{
-    StreamingCompressedGIF::StreamingCompressedGIF( const uint8* gifData )
-    :IStreamingGIF()
-    {
         GifFileData& gif = _impl->file;
         gif.numFrames = 0;
         
@@ -874,7 +761,6 @@ namespace gif_read
         ptr = parseGlobalColorTable(ptr, &gif.globalColorTable, gif.header);
         
         //working buffer for frame data
-        _impl->currentFrame = (uint8*)GT_MALLOC(gif.header.width * gif.header.height * 4 * sizeof(uint8));
         _impl->firstFrame = (uint8*)GT_MALLOC(gif.header.width * gif.header.height * 4 * sizeof(uint8));
         _impl->compressedData = (uint8**)GT_MALLOC(sizeof(uint8**)*MAX_GIF_FRAMES);
         _impl->compressedDataSizes = (uint16*)GT_MALLOC(sizeof(uint16) * MAX_GIF_FRAMES);
@@ -908,40 +794,38 @@ namespace gif_read
         _impl->indexStreams = (IndexStream*)GT_MALLOC(sizeof(IndexStream));
         _impl->indexStreams[0].numIndices = 0;
         _impl->indexStreams[0].indices = (uint16*)GT_MALLOC(sizeof(uint16) * gif.header.width * gif.header.height);
-
+        
         compressedDataToIndexStream(_impl->compressedData[0], _impl->compressedDataSizes[0],firstFrame.imageDesc.localColorTableFlag ? firstFrame.imageDesc.colorTableSize : gif.header.screenDescriptor.colorTableSize, firstFrame.lzwMinCodeSize, codeTable, _impl->decompressionState, _impl->indexStreams[0]);
         
         uint32 transparentIdx = gif.numGfxBlocks > 0 ? gif.gfxControlBlocks[0].transparentColorIdx : NO_CODE;
         indexStreamToColorArray(_impl->indexStreams[0], firstFrame.imageDesc.localColorTableFlag ? firstFrame.localColorTable : gif.globalColorTable, _impl->firstFrame, transparentIdx, firstFrame, gif.header);
-        
-        memcpy(_impl->currentFrame, _impl->firstFrame, gif.header.width * gif.header.height * 4 * sizeof(uint8));
-        
-        
     }
     
-    bool StreamingCompressedGIF::tick(float deltaTime)
+    bool StreamingGIF::tickSingleIterator(uint32 iterator, float deltaTime)
     {
-        GT_CHECK(deltaTime > 0, "Passed negative time to StreamingGif::Tick()");
-        deltaTime = deltaTime > 0 ? deltaTime : 0;
-        _impl->currentTime += deltaTime;
+        if (!isIteratorValid(iterator)) return false;
+        GT_CHECK(iterator < _impl->maxIterators, "Attempting to tick an iterator that does not exist");
+        GT_CHECK(iterator < _impl->numIterators, "Attempting to tick an iterator that does not exist");
+        StreamingGIFIter& iter = _impl->iterators[iterator];
+        iter.currentTime += deltaTime;
         
         GifFileData& gif = _impl->file;
         uint32 runTime = gif.totalRunTime;
         if (runTime == 0) return false;
         
         uint32 runningTime = 0;
-        uint32 hundredths = (uint32)(_impl->currentTime * 100.0f) % gif.totalRunTime;
-        bool newFrame = false;
+        uint32 hundredths = (uint32)(iter.currentTime * 100.0f) % gif.totalRunTime;
+        
         for (uint32 i = 0; i < gif.numGfxBlocks; ++i)
         {
             runningTime += gif.gfxControlBlocks[i].delayTime;
             if (hundredths < runningTime)
             {
-                if (_impl->currentFrameIdx != i)
+                if (iter.currentFrameIdx != i)
                 {
                     if (i == 0)
                     {
-                        memcpy(_impl->currentFrame, _impl->firstFrame, gif.header.width * gif.header.height * 4 * sizeof(uint8));
+                        memcpy(iter.currentFrame, _impl->firstFrame, gif.header.width * gif.header.height * 4 * sizeof(uint8));
                     }
                     else
                     {
@@ -956,24 +840,79 @@ namespace gif_read
                         _impl->indexStreams[0].numIndices = 0;
                         
                         compressedDataToIndexStream(_impl->compressedData[i], _impl->compressedDataSizes[i],frameData.imageDesc.localColorTableFlag ? frameData.imageDesc.colorTableSize : gif.header.screenDescriptor.colorTableSize, frameData.lzwMinCodeSize, codeTable, _impl->decompressionState, _impl->indexStreams[0]);
-
-                        indexStreamToColorArray(_impl->indexStreams[0], colorTable, _impl->currentFrame, transparentIdx, frameData, gif.header);
+                        
+                        indexStreamToColorArray(_impl->indexStreams[0], colorTable, iter.currentFrame, transparentIdx, frameData, gif.header);
                     }
-                    newFrame = true;
-                    _impl->currentFrameIdx = i;
+                    
+                    iter.currentFrameIdx = i;
                 }
-                break;
+                return true;
             }
         }
         
-        return newFrame;
+        return false;
     }
     
-    StreamingCompressedGIF::~StreamingCompressedGIF()
+    //will only ever increment the current frame by 1. If you provide a
+    //timestep that requires jumping multiple frames, it will take several
+    //calls to tick() to catch up. This is intentional, to prevent CPU hitches
+    //from causing atypical CPU usage when encountering a hitch in a
+    //running game
+    void StreamingGIF::tick(float deltaTime)
+    {
+        GT_CHECK(deltaTime > 0, "Passed negative time to StreamingGif::Tick()");
+        deltaTime = deltaTime > 0 ? deltaTime : 0;
+        
+        GifFileData& gif = _impl->file;
+        uint32 runTime = gif.totalRunTime;
+        if (runTime == 0) return;
+        
+        for (uint32 i = 0; i < _impl->numIterators; ++i)
+        {
+            tickSingleIterator(i, deltaTime);
+        }
+    }
+    
+    bool StreamingGIF::isIteratorValid(uint32 iterator)
+    {
+        if (iterator > _impl->maxIterators) return false;
+        if (iterator > _impl->numIterators) return false;
+        if (_impl->iterators[iterator].currentFrame == nullptr) return false;
+        return true;
+    }
+    
+    uint32 StreamingGIF::createIterator()
+    {
+        StreamingGIFIter& iter = _impl->iterators[_impl->numIterators];
+        iter.currentFrame = 0;
+        iter.currentTime = 0;
+        iter.currentFrameIdx = 0;
+        GifFileData& gif = _impl->file;
+        
+        iter.currentFrame = (uint8*)GT_MALLOC(gif.header.width * gif.header.height * 4 * sizeof(uint8));
+        memcpy(iter.currentFrame, _impl->firstFrame, gif.header.width * gif.header.height * 4 * sizeof(uint8));
+        
+        _impl->numIterators++;
+        return _impl->numIterators-1;
+    }
+    
+    void StreamingGIF::destroyIterator(uint32 iterator)
+    {
+        if (_impl->iterators[iterator].currentFrame)
+        {
+            GT_FREE(_impl->iterators[iterator].currentFrame);
+        }
+        else
+        {
+            GT_CHECK(iterator < _impl->maxIterators, "Attempting to free an iterator with index > maxIterators");
+            GT_CHECK(0, "Attemping to destroy an iterator that has not been created");
+        }
+    }
+    
+    StreamingGIF::~StreamingGIF()
     {
         GT_FREE(_impl->indexStreams[0].indices);
         GT_FREE(_impl->indexStreams);
-        
         
         for (uint16 i = 0; i < _impl->file.numFrames; ++i)
         {
@@ -982,8 +921,24 @@ namespace gif_read
         GT_FREE(_impl->compressedData);
         GT_FREE(_impl->compressedDataSizes);
         
+        if (_impl)
+        {
+            GT_FREE(_impl->file.globalColorTable);
+            
+            if (_impl->firstFrame)
+            {
+                GT_FREE(_impl->firstFrame);
+                _impl->firstFrame = nullptr;
+            }
+            
+            for (uint32 i = 0; i < _impl->maxIterators; ++i)
+            {
+                destroyIterator(i);
+            }
+            
+            GT_FREE(_impl);
+        }
     }
-    
 }
 
 #undef GT_MALLOC
